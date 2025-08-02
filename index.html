@@ -47,16 +47,17 @@
         /* Ensure chart canvas is responsive */
         .chart-container {
             position: relative;
-            height: 400px; /* Increased height for bar charts */
+            height: 400px; /* Height for bar charts */
             width: 100%;
-            margin-bottom: 0.5rem; /* Reduced space to fit conclusion */
+            margin-bottom: 0.5rem; /* Space to fit conclusion */
         }
-        /* Adjust height for pie chart to be more circular */
-        .monthly-pie-chart-container {
+        /* Styles for the single dynamic pie chart container */
+        #taskTypeChartContainer {
             position: relative;
-            height: 450px; /* Increased height for pie charts */
-            width: 100%;
-            margin-bottom: 0.5rem; /* Reduced space to fit conclusion */
+            height: 350px; /* Smaller height for pie chart */
+            width: 100%; /* Take full width of its parent */
+            max-width: 450px; /* Max width to keep it somewhat square/circular */
+            margin: 0 auto 1.5rem auto; /* Center it and add bottom margin */
         }
         /* Styles for buttons */
         .action-button {
@@ -158,6 +159,12 @@
         <div id="ticketsChartContainer" class="chart-container hidden">
             <canvas id="ticketsChart"></canvas>
         </div>
+        <div id="uniqueTicketsChartContainer" class="chart-container hidden">
+            <canvas id="uniqueTicketsChart"></canvas>
+        </div>
+        <div id="uniqueTicketsConclusion" class="chart-conclusion hidden">
+            <!-- Conclusion for unique tickets will be inserted here -->
+        </div>
         <div id="timeSpentChartContainer" class="chart-container hidden">
             <canvas id="timeSpentChart"></canvas>
         </div>
@@ -173,9 +180,16 @@
         <div id="memberTimeSpentChartContainer" class="chart-container hidden">
             <canvas id="memberTimeSpentChart"></canvas>
         </div>
-        <!-- Container for dynamically generated monthly task type charts -->
-        <div id="allMonthlyTaskTypeCharts" class="w-full flex flex-col items-center">
-            <!-- Monthly task type charts will be appended here -->
+        
+        <!-- Type of Task Chart Section -->
+        <div class="w-full mt-4 flex flex-col items-center">
+            <label for="taskTypePeriodSelect" class="block text-gray-700 text-sm font-medium mb-2">View Task Type Distribution For:</label>
+            <select id="taskTypePeriodSelect" class="w-full max-w-xs px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 ease-in-out">
+                <!-- Options will be dynamically populated -->
+            </select>
+            <div id="taskTypeChartContainer" class="hidden"> <!-- This is the single container for the pie chart -->
+                <canvas id="taskTypeChart"></canvas>
+            </div>
         </div>
 
         <button id="exportPdfButton" class="action-button hidden">Export Current Report to PDF</button>
@@ -215,6 +229,9 @@
         const loadingIndicator = document.getElementById('loadingIndicator');
         const ticketsChartContainer = document.getElementById('ticketsChartContainer');
         const ticketsChartCanvas = document.getElementById('ticketsChart');
+        const uniqueTicketsChartContainer = document.getElementById('uniqueTicketsChartContainer');
+        const uniqueTicketsChartCanvas = document.getElementById('uniqueTicketsChart');
+        const uniqueTicketsConclusionDiv = document.getElementById('uniqueTicketsConclusion');
         const timeSpentChartContainer = document.getElementById('timeSpentChartContainer');
         const timeSpentChartCanvas = document.getElementById('timeSpentChart');
         const timeSpentConclusionDiv = document.getElementById('timeSpentConclusion');
@@ -224,7 +241,10 @@
         const projectTimeSpentChartCanvas = document.getElementById('projectTimeSpentChart');
         const memberTimeSpentChartContainer = document.getElementById('memberTimeSpentChartContainer');
         const memberTimeSpentChartCanvas = document.getElementById('memberTimeSpentChart');
-        const allMonthlyTaskTypeChartsContainer = document.getElementById('allMonthlyTaskTypeCharts');
+        const taskTypeChartContainer = document.getElementById('taskTypeChartContainer'); // Single container for task type chart
+        const taskTypeChartCanvas = document.getElementById('taskTypeChart'); // Single canvas for task type chart
+        const taskTypePeriodSelect = document.getElementById('taskTypePeriodSelect'); // New: Task type period dropdown
+        const allMonthlyTaskTypeChartsContainer = document.getElementById('allMonthlyTaskTypeCharts'); // This will now be empty or removed if no longer needed
         const exportPdfButton = document.getElementById('exportPdfButton');
         const projectSelect = document.getElementById('projectSelect');
         const reportFormatSelect = document.getElementById('reportFormatSelect');
@@ -234,11 +254,12 @@
         const noProjectsMessage = document.getElementById('noProjectsMessage');
 
         let ticketsChartInstance = null;
+        let uniqueTicketsChartInstance = null;
         let timeSpentChartInstance = null;
         let projectTicketsChartInstance = null;
         let projectTimeSpentChartInstance = null;
         let memberTimeSpentChartInstance = null;
-        const monthlyTaskTypeChartInstances = {};
+        let taskTypeChartInstance = null; // Single instance for the dynamic task type chart
 
         // In-memory storage for processed project data
         const allProcessedProjectData = {};
@@ -476,8 +497,7 @@
 
 
         /**
-         * Renders the tickets bar chart for monthly data.
-         * This chart now displays the TOTAL NUMBER OF TICKET ENTRIES (non-unique).
+         * Renders the tickets bar chart for total ticket entries (non-unique).
          * @param {object} dataToChart - Object containing report data (monthly, quarterly, or yearly).
          * @param {string} reportTitleSuffix - Suffix for the chart title (e.g., "by Month" or "Across Projects").
          * @param {string} xAxisLabel - Label for the X-axis.
@@ -556,6 +576,108 @@
                     }
                 }
             });
+        }
+
+        /**
+         * Renders the unique tickets bar chart.
+         * @param {object} dataToChart - Object containing report data (monthly, quarterly, or yearly).
+         * @param {string} reportTitleSuffix - Suffix for the chart title.
+         * @param {string} xAxisLabel - Label for the X-axis.
+         */
+        function renderUniqueTicketsChart(dataToChart, reportTitleSuffix = "by Period", xAxisLabel = "Period") {
+            if (uniqueTicketsChartInstance) {
+                uniqueTicketsChartInstance.destroy();
+            }
+
+            const labels = Object.keys(dataToChart);
+            const uniqueTicketCounts = labels.map(label => dataToChart[label].totalUniqueTickets);
+            const totalTicketEntries = labels.map(label => dataToChart[label].totalTicketsCount);
+
+
+            const hasData = uniqueTicketCounts.some(count => count > 0);
+
+            if (labels.length === 0 || !hasData) {
+                uniqueTicketsChartContainer.classList.add('hidden');
+                uniqueTicketsConclusionDiv.classList.add('hidden');
+                return;
+            }
+
+            uniqueTicketsChartContainer.classList.remove('hidden');
+
+            const ctx = uniqueTicketsChartCanvas.getContext('2d');
+            uniqueTicketsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Unique Tickets',
+                        data: uniqueTicketCounts,
+                        backgroundColor: 'rgba(255, 205, 86, 0.8)', // Yellow/Gold for unique tickets
+                        borderColor: 'rgba(255, 205, 86, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Total Unique Tickets ${reportTitleSuffix}`,
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: { display: false },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value) {
+                                return value.toLocaleString();
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Count',
+                                font: { family: 'Inter' }
+                            },
+                            ticks: {
+                                precision: 0
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: xAxisLabel,
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Generate and display conclusion for unique tickets
+            const overallTotalEntries = totalTicketEntries.reduce((sum, val) => sum + val, 0);
+            const overallUniqueTickets = uniqueTicketCounts.reduce((sum, val) => sum + val, 0);
+            const backAndForthCount = overallTotalEntries - overallUniqueTickets;
+            let conclusionText = "";
+
+            if (backAndForthCount > 0) {
+                conclusionText = `Conclusion: There were approximately ${backAndForthCount.toLocaleString()} instances of "back and forth" or duplicate ticket entries across the selected period(s).`;
+            } else {
+                conclusionText = `Conclusion: All ticket entries were unique for the selected period(s), indicating no "back and forth" or duplicate entries.`;
+            }
+
+            uniqueTicketsConclusionDiv.textContent = conclusionText;
+            uniqueTicketsConclusionDiv.classList.remove('hidden');
         }
 
         /**
@@ -919,33 +1041,30 @@
 
 
         /**
-         * Renders a task type pie chart.
+         * Renders the single dynamic task type pie chart.
          * @param {string} chartTitle - Title for the chart.
          * @param {object} taskTypeCounts - An object with task types as keys and their counts as values.
-         * @param {string} containerIdSuffix - Suffix for the container ID (e.g., month name or "Overall").
          */
-        function renderTaskTypePieChart(chartTitle, taskTypeCounts, containerIdSuffix) {
+        function renderTaskTypePieChart(chartTitle, taskTypeCounts) {
+            if (taskTypeChartInstance) {
+                taskTypeChartInstance.destroy();
+            }
+
             const labels = Object.keys(taskTypeCounts);
             const data = Object.values(taskTypeCounts);
 
             if (labels.length === 0) {
+                taskTypeChartContainer.classList.add('hidden'); // Hide container if no data
                 return;
             }
+
+            taskTypeChartContainer.classList.remove('hidden'); // Show container
 
             const backgroundColors = labels.map((_, i) => getPaletteColor(i));
             const borderColors = labels.map((_, i) => getPaletteBorderColor(i));
 
-            const chartDiv = document.createElement('div');
-            chartDiv.classList.add('monthly-pie-chart-container'); // Reusing class for styling
-            chartDiv.id = `taskTypeChartContainer_${containerIdSuffix.replace(/\s+/g, '')}`;
-
-            const chartCanvas = document.createElement('canvas');
-            chartCanvas.id = `taskTypeChart_${containerIdSuffix.replace(/\s+/g, '')}`;
-            chartDiv.appendChild(chartCanvas);
-            allMonthlyTaskTypeChartsContainer.appendChild(chartDiv);
-
-            const ctx = chartCanvas.getContext('2d');
-            const newChartInstance = new Chart(ctx, {
+            const ctx = taskTypeChartCanvas.getContext('2d');
+            taskTypeChartInstance = new Chart(ctx, {
                 type: 'pie',
                 data: {
                     labels: labels,
@@ -1008,7 +1127,6 @@
                     }
                 }
             });
-            monthlyTaskTypeChartInstances[containerIdSuffix] = newChartInstance; // Store with unique suffix
         }
 
         /**
@@ -1018,6 +1136,10 @@
             if (ticketsChartInstance) {
                 ticketsChartInstance.destroy();
                 ticketsChartInstance = null;
+            }
+            if (uniqueTicketsChartInstance) {
+                uniqueTicketsChartInstance.destroy();
+                uniqueTicketsChartInstance = null;
             }
             if (timeSpentChartInstance) {
                 timeSpentChartInstance.destroy();
@@ -1035,16 +1157,21 @@
                 memberTimeSpentChartInstance.destroy();
                 memberTimeSpentChartInstance = null;
             }
-            const keysToDestroy = Object.keys(monthlyTaskTypeChartInstances);
-            for (const key of keysToDestroy) {
-                if (monthlyTaskTypeChartInstances[key]) {
-                    monthlyTaskTypeChartInstances[key].destroy();
-                    delete monthlyTaskTypeChartInstances[key];
-                }
+            // Destroy the single task type chart instance
+            if (taskTypeChartInstance) {
+                taskTypeChartInstance.destroy();
+                taskTypeChartInstance = null;
             }
-            allMonthlyTaskTypeChartsContainer.innerHTML = '';
+            // Clear the task type period dropdown
+            taskTypePeriodSelect.innerHTML = '';
+            taskTypeChartContainer.classList.add('hidden'); // Hide the single task type chart container
+
+            // No longer need to iterate monthlyTaskTypeChartInstances as they are not stored individually
+            // allMonthlyTaskTypeChartsContainer.innerHTML = ''; // This container is now effectively unused or can be removed if desired
 
             ticketsChartContainer.classList.add('hidden');
+            uniqueTicketsChartContainer.classList.add('hidden');
+            uniqueTicketsConclusionDiv.classList.add('hidden');
             timeSpentChartContainer.classList.add('hidden');
             timeSpentConclusionDiv.classList.add('hidden');
             projectTicketsChartContainer.classList.add('hidden');
@@ -1093,6 +1220,69 @@
         }
 
         /**
+         * Populates the task type period dropdown based on the available data and selected report format.
+         * @param {object} dataToDisplay - The aggregated data (monthly, quarterly, or yearly).
+         * @param {string} selectedReportFormat - The currently selected report format ('Monthly', 'Quarterly', 'Yearly').
+         */
+        function populateTaskTypePeriodDropdown(dataToDisplay, selectedReportFormat) {
+            taskTypePeriodSelect.innerHTML = ''; // Clear existing options
+
+            const periods = Object.keys(dataToDisplay);
+            if (periods.length === 0) {
+                taskTypePeriodSelect.classList.add('hidden');
+                return;
+            } else {
+                taskTypePeriodSelect.classList.remove('hidden');
+            }
+
+            // Add "Overall" option if it's a combined or yearly report
+            if (selectedReportFormat === 'Yearly' || (Object.keys(allProcessedProjectData).length > 1 && selectedReportFormat !== 'Monthly')) {
+                const option = document.createElement('option');
+                option.value = 'Overall';
+                option.textContent = 'Overall Report';
+                taskTypePeriodSelect.appendChild(option);
+            }
+
+            // Sort periods for dropdown
+            const sortedPeriods = periods.sort((a, b) => {
+                if (selectedReportFormat === 'Monthly') {
+                    const aIndex = MONTH_ORDER.indexOf(a.split(' ')[0]);
+                    const bIndex = MONTH_ORDER.indexOf(b.split(' ')[0]);
+                    if (aIndex !== -1 && bIndex !== -1) {
+                        const aYear = parseInt(a.split(' ')[1] || new Date().getFullYear());
+                        const bYear = parseInt(b.split(' ')[1] || new Date().getFullYear());
+                        if (aYear !== bYear) return aYear - bYear;
+                        return aIndex - bIndex;
+                    }
+                    return a.localeCompare(b);
+                } else if (selectedReportFormat === 'Quarterly') {
+                    const aQuarter = parseInt(a.substring(1, a.indexOf(' ')));
+                    const bQuarter = parseInt(b.substring(1, b.indexOf(' ')));
+                    const aYear = parseInt(a.split(' ')[1]);
+                    const bYear = parseInt(b.split(' ')[1]);
+                    if (aYear !== bYear) return aYear - bYear;
+                    return aQuarter - bQuarter;
+                } else if (selectedReportFormat === 'Yearly') {
+                    return parseInt(a) - parseInt(b);
+                }
+                return a.localeCompare(b);
+            });
+
+            sortedPeriods.forEach(period => {
+                const option = document.createElement('option');
+                option.value = period;
+                option.textContent = period;
+                taskTypePeriodSelect.appendChild(option);
+            });
+
+            // Trigger initial chart render for the first option
+            if (taskTypePeriodSelect.options.length > 0) {
+                taskTypePeriodSelect.value = taskTypePeriodSelect.options[0].value; // Select the first option
+                taskTypePeriodSelect.dispatchEvent(new Event('change')); // Trigger change to render chart
+            }
+        }
+
+        /**
          * Generates and displays a combined report for selected projects.
          */
         generateCombinedReportButton.addEventListener('click', () => {
@@ -1112,7 +1302,7 @@
             const combinedMonthlyDataRaw = {};
             const combinedOverallUniqueTicketsSet = new Set();
             let combinedOverallTotalTicketsCount = 0;
-            const combinedOverallTaskTypeCounts = {};
+            const combinedOverallTaskTypeCounts = {}; // This will now store the *aggregated* task types for the combined OVERALL report
             const ticketsPerProjectChartData = {};
             const timeSpentPerProjectChartData = {};
             const combinedTimeSpentPerMember = {};
@@ -1242,17 +1432,22 @@
 
 
                 renderTicketsChart(dataToDisplay, `Across Selected Projects (${reportSuffix})`, reportPeriodLabel);
+                renderUniqueTicketsChart(dataToDisplay, `Across Selected Projects (${reportSuffix})`, reportPeriodLabel);
                 renderTimeSpentChart(dataToDisplay, `Across Selected Projects (${reportSuffix})`, reportPeriodLabel);
                 renderProjectTicketsChart(ticketsPerProjectChartData, "Total Ticket Entries Per Selected Project");
                 renderProjectTimeSpentChart(timeSpentPerProjectChartData, "Total Time Spent Per Selected Project");
                 renderMemberTimeSpentChart(combinedTimeSpentPerMember, "Overall Time Spent Per Member Across Selected Projects");
 
-
-                if (Object.keys(combinedOverallTaskTypeCounts).length > 0) {
-                    renderTaskTypePieChart(`Overall Task Type Distribution Across Selected Projects`, combinedOverallTaskTypeCounts, "CombinedOverall");
+                // Populate and render the single task type pie chart based on the combined data
+                populateTaskTypePeriodDropdown(dataToDisplay, selectedReportFormat);
+                if (taskTypePeriodSelect.options.length > 0) {
+                    taskTypePeriodSelect.value = taskTypePeriodSelect.options[0].value; // Select the first option
+                    taskTypePeriodSelect.dispatchEvent(new Event('change')); // Trigger change to render chart
                 } else {
-                    appendMessage("Bot: Note: No valid 'Type of Task' data was found across the selected projects, so no combined pie chart was generated.", "bot");
+                    appendMessage("Bot: Note: No valid 'Type of Task' data was found across the selected projects for any period, so no pie charts were generated.", "bot");
+                    taskTypeChartContainer.classList.add('hidden');
                 }
+                
                 exportPdfButton.classList.remove('hidden');
             }
         });
@@ -1488,22 +1683,19 @@
 
 
                         renderTicketsChart(dataToDisplay, `for ${selectedProject} (${reportSuffix})`, reportPeriodLabel);
+                        renderUniqueTicketsChart(dataToDisplay, `for ${selectedProject} (${reportSuffix})`, reportPeriodLabel);
                         renderTimeSpentChart(dataToDisplay, `for ${selectedProject} (${reportSuffix})`, reportPeriodLabel);
                         renderMemberTimeSpentChart(currentProjectOverallTimeSpentPerMember, `Overall Time Spent Per Member for ${selectedProject}`);
 
-
-                        let hasTaskTypeDataForAnyPeriod = false;
-                        sortedPeriods.forEach(period => {
-                            const periodReport = dataToDisplay[period];
-                            if (Object.keys(periodReport.taskTypeCounts).length > 0) {
-                                renderTaskTypePieChart(`Distribution of Task Types for ${period}`, periodReport.taskTypeCounts, period);
-                                hasTaskTypeDataForAnyPeriod = true;
-                            }
-                        });
-
-                        if (!hasTaskTypeDataForAnyPeriod) {
-                            appendMessage("Bot: Note: No valid 'Type of Task' data was found for this project, so no pie charts were generated.", "bot");
+                        // Populate and render the single task type pie chart for single project report
+                        populateTaskTypePeriodDropdown(dataToDisplay, selectedReportFormat);
+                        if (taskTypePeriodSelect.options.length > 0) {
+                            taskTypePeriodSelect.value = taskTypePeriodSelect.options[0].value; // Select the first option
+                            taskTypePeriodSelect.dispatchEvent(new Event('change')); // Trigger change to render chart
+                        } else {
+                            taskTypeChartContainer.classList.add('hidden'); // Hide if no data
                         }
+                        
                         exportPdfButton.classList.remove('hidden');
                     }
 
@@ -1539,6 +1731,74 @@
             appendMessage(`Bot: Report format set to "${reportFormatSelect.value}". Please upload an Excel file or generate a combined report.`, "bot");
         });
 
+        // Event listener for the new task type period dropdown
+        taskTypePeriodSelect.addEventListener('change', () => {
+            const selectedPeriod = taskTypePeriodSelect.value;
+            const currentReportFormat = reportFormatSelect.value;
+            let taskTypeDataForPeriod = {};
+
+            // Determine if it's a single project report or combined report
+            const isCombinedReport = generateCombinedReportButton.disabled === false && projectCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked').length > 0;
+
+            if (isCombinedReport) {
+                const selectedProjectNames = Array.from(projectCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked'))
+                                                .map(checkbox => checkbox.value);
+                // Re-aggregate monthly data for selected projects to get task type counts per period
+                const combinedMonthlyDataRaw = {};
+                selectedProjectNames.forEach(projectName => {
+                    const projectData = allProcessedProjectData[projectName];
+                    if (projectData && projectData.monthlyData) {
+                        Object.keys(projectData.monthlyData).forEach(month => {
+                            if (!combinedMonthlyDataRaw[month]) {
+                                combinedMonthlyDataRaw[month] = { taskTypeCounts: {} };
+                            }
+                            Object.keys(projectData.monthlyData[month].taskTypeCounts).forEach(taskType => {
+                                combinedMonthlyDataRaw[month].taskTypeCounts[taskType] = (combinedMonthlyDataRaw[month].taskTypeCounts[taskType] || 0) + projectData.monthlyData[month].taskTypeCounts[taskType];
+                            });
+                        });
+                    }
+                });
+                const combinedDataAggregated = aggregateDataByFormat(combinedMonthlyDataRaw, currentReportFormat);
+
+                if (selectedPeriod === 'Overall') {
+                    // Aggregate all task types from combinedDataAggregated for "Overall" combined view
+                    Object.keys(combinedDataAggregated).forEach(period => {
+                        Object.keys(combinedDataAggregated[period].taskTypeCounts).forEach(taskType => {
+                            taskTypeDataForPeriod[taskType] = (taskTypeDataForPeriod[taskType] || 0) + combinedDataAggregated[period].taskTypeCounts[taskType];
+                        });
+                    });
+                } else {
+                    taskTypeDataForPeriod = combinedDataAggregated[selectedPeriod]?.taskTypeCounts || {};
+                }
+
+            } else { // Single project report
+                const selectedProject = projectSelect.value;
+                const projectData = allProcessedProjectData[selectedProject];
+                if (projectData && projectData.monthlyData) {
+                    const singleProjectDataAggregated = aggregateDataByFormat(projectData.monthlyData, currentReportFormat);
+                    if (selectedPeriod === 'Overall') {
+                        // Aggregate all task types from singleProjectDataAggregated for "Overall" single project view
+                         Object.keys(singleProjectDataAggregated).forEach(period => {
+                            Object.keys(singleProjectDataAggregated[period].taskTypeCounts).forEach(taskType => {
+                                taskTypeDataForPeriod[taskType] = (taskTypeDataForPeriod[taskType] || 0) + singleProjectDataAggregated[period].taskTypeCounts[taskType];
+                            });
+                        });
+                    } else {
+                        taskTypeDataForPeriod = singleProjectDataAggregated[selectedPeriod]?.taskTypeCounts || {};
+                    }
+                }
+            }
+
+            if (Object.keys(taskTypeDataForPeriod).length > 0) {
+                renderTaskTypePieChart(`Distribution of Task Types for ${selectedPeriod}`, taskTypeDataForPeriod);
+            } else {
+                taskTypeChartContainer.classList.add('hidden');
+                appendMessage(`Bot: No 'Type of Task' data found for ${selectedPeriod}.`, "bot");
+            }
+        });
+
+
+        // Initial update of project checkboxes when the page loads
         updateProjectCheckboxes();
     </script>
 </body>
