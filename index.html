@@ -1,0 +1,1545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-1.0">
+    <title>Global Specialist Report Generator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f0f2f5;
+        }
+        .chat-message {
+            background-color: #e2e8f0;
+            padding: 12px 16px;
+            border-radius: 1rem;
+            margin-bottom: 8px;
+            max-width: 80%;
+        }
+        .chat-message.bot {
+            background-color: #dbeafe; /* Light blue for bot messages */
+            align-self: flex-start;
+            border-bottom-left-radius: 0;
+        }
+        .chat-message.user {
+            background-color: #93c5fd; /* Blue for user messages (simulated input) */
+            align-self: flex-end;
+            border-bottom-right-radius: 0;
+            color: white;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+            display: none; /* Hidden by default */
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Ensure chart canvas is responsive */
+        .chart-container {
+            position: relative;
+            height: 400px; /* Increased height for bar charts */
+            width: 100%;
+            margin-bottom: 0.5rem; /* Reduced space to fit conclusion */
+        }
+        /* Adjust height for pie chart to be more circular */
+        .monthly-pie-chart-container {
+            position: relative;
+            height: 450px; /* Increased height for pie charts */
+            width: 100%;
+            margin-bottom: 0.5rem; /* Reduced space to fit conclusion */
+        }
+        /* Styles for buttons */
+        .action-button {
+            background-color: #10B981; /* Emerald green */
+            color: white;
+            padding: 12px 24px;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            transition: background-color 0.2s ease-in-out;
+            cursor: pointer;
+            border: none;
+            margin-top: 1.5rem;
+        }
+        .action-button:hover {
+            background-color: #059669; /* Darker emerald green on hover */
+        }
+        .action-button:disabled {
+            background-color: #9ca3af; /* Gray for disabled */
+            cursor: not-allowed;
+        }
+        .project-checkbox-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.5rem;
+            margin-top: 1rem;
+            padding: 1rem;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.5rem;
+            background-color: #f9fafb;
+        }
+        .project-checkbox-list label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+            color: #4b5563;
+        }
+        .chart-conclusion {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            margin-bottom: 1.5rem;
+            background-color: #f0f9ff; /* Light blue background */
+            border: 1px solid #bfdbfe; /* Light blue border */
+            border-radius: 0.5rem;
+            font-size: 0.95rem;
+            color: #1e40af; /* Dark blue text */
+            text-align: center;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-5xl flex flex-col items-center">
+        <h1 id="mainReportTitle" class="text-3xl font-bold text-gray-800 mb-6 text-center">Global Specialist Report Generator</h1>
+        <p class="text-gray-600 mb-6 text-center">Upload your Excel file to generate a quick report on tickets and time spent, including visual charts.</p>
+
+        <!-- Report Options Section -->
+        <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label for="projectSelect" class="block text-gray-700 text-sm font-medium mb-2">Select Project for Upload:</label>
+                <select id="projectSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 ease-in-out">
+                    <option value="General Report">General Report</option>
+                    <option value="Pierre Fabre Revamp">Pierre Fabre Revamp</option>
+                    <option value="Pierre Fabre PIM">Pierre Fabre PIM</option>
+                    <option value="Pierre Fabre Assets Indexation">Pierre Fabre Assets Indexation</option>
+                    <option value="Sitecore EMEA">Sitecore EMEA</option>
+                    <option value="Sitecore APAC">Sitecore APAC</option>
+                    <option value="Sitecore USA">Sitecore USA</option>
+                </select>
+            </div>
+            <div>
+                <label for="reportFormatSelect" class="block text-gray-700 text-sm font-medium mb-2">Select Report Format:</label>
+                <select id="reportFormatSelect" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 ease-in-out">
+                    <option value="Monthly">Monthly</option>
+                    <option value="Quarterly">Quarterly</option>
+                    <option value="Yearly">Yearly</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="w-full mb-6">
+            <label for="excelFile" class="block text-gray-700 text-sm font-medium mb-2">Upload Excel File for Selected Project:</label>
+            <input type="file" id="excelFile" accept=".xlsx, .xls" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 ease-in-out">
+            <p class="text-xs text-gray-500 mt-1">
+                Please ensure each month's data is in a **separate tab (worksheet)** named after the month (e.g., "May", "June"). Each tab should have "Tickets", "Time Spent", "Estimated Time Spent", and optionally "Type of Task" and "Author/Member" columns in its **first row**. For "Type of Task", only "Complex-Task", "PH_Others", and "content-integration" will be counted.
+            </p>
+        </div>
+
+        <div id="loadingIndicator" class="loading-spinner mb-4"></div>
+
+        <div id="reportOutput" class="w-full bg-gray-50 p-4 rounded-lg border border-gray-200 min-h-[200px] max-h-[400px] overflow-y-auto flex flex-col space-y-2 mb-6">
+            <!-- Report messages will appear here -->
+            <div class="chat-message bot">
+                Hello! I'm ready to help you generate a report. Please upload an Excel file.
+            </div>
+        </div>
+
+        <!-- Chart Containers -->
+        <div id="ticketsChartContainer" class="chart-container hidden">
+            <canvas id="ticketsChart"></canvas>
+        </div>
+        <div id="timeSpentChartContainer" class="chart-container hidden">
+            <canvas id="timeSpentChart"></canvas>
+        </div>
+        <div id="timeSpentConclusion" class="chart-conclusion hidden">
+            <!-- Conclusion text will be inserted here -->
+        </div>
+        <div id="projectTicketsChartContainer" class="chart-container hidden">
+            <canvas id="projectTicketsChart"></canvas>
+        </div>
+        <div id="projectTimeSpentChartContainer" class="chart-container hidden">
+            <canvas id="projectTimeSpentChart"></canvas>
+        </div>
+        <div id="memberTimeSpentChartContainer" class="chart-container hidden">
+            <canvas id="memberTimeSpentChart"></canvas>
+        </div>
+        <!-- Container for dynamically generated monthly task type charts -->
+        <div id="allMonthlyTaskTypeCharts" class="w-full flex flex-col items-center">
+            <!-- Monthly task type charts will be appended here -->
+        </div>
+
+        <button id="exportPdfButton" class="action-button hidden">Export Current Report to PDF</button>
+
+        <!-- Combined Projects Report Section -->
+        <div class="w-full mt-8 pt-6 border-t border-gray-200">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4 text-center">Generate Combined Report for Multiple Projects</h2>
+            <p class="text-gray-600 mb-4 text-center">Select projects below to generate a combined performance report.</p>
+
+            <div id="projectCheckboxes" class="project-checkbox-list">
+                <!-- Checkboxes will be dynamically inserted here -->
+                <p class="text-center text-gray-500 col-span-full" id="noProjectsMessage">Upload files for projects above to enable combined reporting.</p>
+            </div>
+            <button id="generateCombinedReportButton" class="action-button w-full" disabled>Generate Combined Report</button>
+        </div>
+
+    </div>
+
+    <!-- SheetJS Library CDN for reading Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Chart.js CDN for drawing charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.0/dist/chart.min.js"></script>
+    <!-- Chart.js Datalabels Plugin CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <!-- html2canvas CDN for capturing HTML as image -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <!-- jsPDF CDN for generating PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <script>
+        // Register the datalabels plugin globally
+        Chart.register(ChartDataLabels);
+
+        // Get references to DOM elements
+        const excelFileInput = document.getElementById('excelFile');
+        const reportOutputDiv = document.getElementById('reportOutput');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const ticketsChartContainer = document.getElementById('ticketsChartContainer');
+        const ticketsChartCanvas = document.getElementById('ticketsChart');
+        const timeSpentChartContainer = document.getElementById('timeSpentChartContainer');
+        const timeSpentChartCanvas = document.getElementById('timeSpentChart');
+        const timeSpentConclusionDiv = document.getElementById('timeSpentConclusion');
+        const projectTicketsChartContainer = document.getElementById('projectTicketsChartContainer');
+        const projectTicketsChartCanvas = document.getElementById('projectTicketsChart');
+        const projectTimeSpentChartContainer = document.getElementById('projectTimeSpentChartContainer');
+        const projectTimeSpentChartCanvas = document.getElementById('projectTimeSpentChart');
+        const memberTimeSpentChartContainer = document.getElementById('memberTimeSpentChartContainer');
+        const memberTimeSpentChartCanvas = document.getElementById('memberTimeSpentChart');
+        const allMonthlyTaskTypeChartsContainer = document.getElementById('allMonthlyTaskTypeCharts');
+        const exportPdfButton = document.getElementById('exportPdfButton');
+        const projectSelect = document.getElementById('projectSelect');
+        const reportFormatSelect = document.getElementById('reportFormatSelect');
+        const mainReportTitle = document.getElementById('mainReportTitle');
+        const projectCheckboxesContainer = document.getElementById('projectCheckboxes');
+        const generateCombinedReportButton = document.getElementById('generateCombinedReportButton');
+        const noProjectsMessage = document.getElementById('noProjectsMessage');
+
+        let ticketsChartInstance = null;
+        let timeSpentChartInstance = null;
+        let projectTicketsChartInstance = null;
+        let projectTimeSpentChartInstance = null;
+        let memberTimeSpentChartInstance = null;
+        const monthlyTaskTypeChartInstances = {};
+
+        // In-memory storage for processed project data
+        const allProcessedProjectData = {};
+
+        // Professional color palette for pie charts
+        const PIE_CHART_COLORS = [
+            'rgba(66, 133, 244, 0.8)', // Google Blue, slightly muted
+            'rgba(52, 168, 83, 0.8)',  // Google Green, slightly muted
+            'rgba(247, 197, 72, 0.8)', // Muted Yellow/Gold
+            'rgba(156, 39, 176, 0.8)', // Purple
+            'rgba(0, 188, 212, 0.8)',  // Cyan
+            'rgba(255, 152, 0, 0.8)',  // Orange
+            'rgba(96, 125, 139, 0.8)', // Blue-Gray
+            'rgba(121, 85, 72, 0.8)'   // Brown
+        ];
+
+        // Professional border colors (slightly darker versions of fill colors)
+        const PIE_CHART_BORDER_COLORS = [
+            'rgba(66, 133, 244, 1)',
+            'rgba(52, 168, 83, 1)',
+            'rgba(247, 197, 72, 1)',
+            'rgba(156, 39, 176, 1)',
+            'rgba(0, 188, 212, 1)',
+            'rgba(255, 152, 0, 1)',
+            'rgba(96, 125, 139, 1)',
+            'rgba(121, 85, 72, 1)'
+        ];
+
+        const MONTH_ORDER = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        // Define the specific task types to count
+        const VALID_TASK_TYPES = ['Complex-Task', 'PH_Others', 'content-integration'];
+
+        /**
+         * Get a color from the predefined palette, cycling through it.
+         * @param {number} index - The index to pick a color from the palette.
+         * @param {number} alpha - Opacity value (0 to 1).
+         * @returns {string} RGBA color string.
+         */
+        function getPaletteColor(index, alpha = 0.8) {
+            const baseColor = PIE_CHART_COLORS[index % PIE_CHART_COLORS.length];
+            // Replace the alpha value in the RGBA string
+            return baseColor.replace(/,\s*\d\.\d+\)/, `, ${alpha})`);
+        }
+
+        /**
+         * Get a border color from the predefined palette, cycling through it.
+         * @param {number} index - The index to pick a border color from the palette.
+         * @returns {string} RGBA color string.
+         */
+        function getPaletteBorderColor(index) {
+            return PIE_CHART_BORDER_COLORS[index % PIE_CHART_BORDER_COLORS.length];
+        }
+
+        /**
+         * Converts hours to a human-readable "Xh Ym" format.
+         * @param {number} totalHours - The total number of hours.
+         * @returns {string} Formatted time string.
+         */
+        function formatHoursForDisplay(totalHours) {
+            if (isNaN(totalHours) || totalHours < 0) {
+                return "0h";
+            }
+            const hours = Math.floor(totalHours);
+            const minutes = Math.round((totalHours - hours) * 60);
+
+            if (hours > 0 && minutes > 0) {
+                return `${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                return `${hours}h`;
+            } else {
+                return `${minutes}m`;
+            }
+        }
+
+        /**
+         * Parses a time string (e.g., "40m", "1h", "2hr", "3.5h") to total hours.
+         * Assumes plain numbers without units are in hours.
+         * @param {string|number} timeValue - The time value from Excel.
+         * @returns {number} Total hours, or NaN if invalid format.
+         */
+        function parseTimeSpentToHours(timeValue) {
+            let timeString = String(timeValue || '').trim();
+            if (timeString === '') return NaN;
+
+            const lowerCaseString = timeString.toLowerCase();
+
+            const minutesMatch = lowerCaseString.match(/^(\d+(\.\d+)?)\s*m$/);
+            if (minutesMatch) {
+                return parseFloat(minutesMatch[1]) / 60; // Convert minutes to hours
+            }
+
+            const hoursMatch = lowerCaseString.match(/^(\d+(\.\d+)?)\s*h(r)?$/);
+            if (hoursMatch) {
+                return parseFloat(hoursMatch[1]); // Already in hours
+            }
+
+            // If it's just a number without units, assume it's in hours
+            const floatValue = parseFloat(timeString);
+            if (!isNaN(floatValue)) {
+                return floatValue; // Assume hours if no unit specified
+            }
+
+            return NaN; // Return NaN for invalid formats
+        }
+
+
+        /**
+         * Appends a message to the chat report output.
+         * @param {string} message - The text message to display.
+         * @param {string} sender - 'bot' or 'user' to style the message.
+         */
+        function appendMessage(message, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.classList.add('chat-message', sender);
+            messageDiv.textContent = message;
+            reportOutputDiv.appendChild(messageDiv);
+            // Scroll to the bottom to show the latest message
+            reportOutputDiv.scrollTop = reportOutputDiv.scrollHeight;
+        }
+
+        /**
+         * Aggregates monthly data into quarterly or yearly format.
+         * @param {object} monthlyData - The raw monthly data.
+         * @param {string} format - 'Monthly', 'Quarterly', or 'Yearly'.
+         * @returns {object} Aggregated data.
+         */
+        function aggregateDataByFormat(monthlyData, format) {
+            const aggregatedData = {};
+
+            if (format === 'Monthly') {
+                // Sort months chronologically for display
+                const sortedMonths = Object.keys(monthlyData).sort((a, b) => {
+                    const aIndex = MONTH_ORDER.indexOf(a.split(' ')[0]); // Assuming "Month Year" format
+                    const bIndex = MONTH_ORDER.indexOf(b.split(' ')[0]);
+                    if (aIndex !== -1 && bIndex !== -1) {
+                        return aIndex - bIndex;
+                    }
+                    return a.localeCompare(b);
+                });
+
+                sortedMonths.forEach(month => {
+                    aggregatedData[month] = monthlyData[month];
+                });
+                return aggregatedData;
+            }
+
+            // For Quarterly and Yearly, we need to extract year from month name if present (e.g., "Jan 2023")
+            // Or assume a default year if only month names are used.
+            const dataWithYears = {};
+            Object.keys(monthlyData).forEach(monthName => {
+                const parts = monthName.split(' ');
+                let month = parts[0];
+                let year = parts.length > 1 ? parseInt(parts[1]) : new Date().getFullYear(); // Default to current year
+
+                if (!dataWithYears[year]) {
+                    dataWithYears[year] = {};
+                }
+                dataWithYears[year][month] = monthlyData[monthName];
+            });
+
+            const sortedYears = Object.keys(dataWithYears).sort();
+
+            sortedYears.forEach(year => {
+                const yearData = dataWithYears[year];
+                if (format === 'Quarterly') {
+                    for (let q = 1; q <= 4; q++) {
+                        const quarterName = `Q${q} ${year}`;
+                        aggregatedData[quarterName] = {
+                            totalTicketsCount: 0,
+                            uniqueTicketsSet: new Set(),
+                            totalTimeSpent: 0,
+                            totalEstimatedTimeSpent: 0,
+                            taskTypeCounts: {},
+                            timeSpentPerMember: {}
+                        };
+
+                        const monthsInQuarter = [];
+                        if (q === 1) monthsInQuarter.push('January', 'February', 'March');
+                        if (q === 2) monthsInQuarter.push('April', 'May', 'June');
+                        if (q === 3) monthsInQuarter.push('July', 'August', 'September');
+                        if (q === 4) monthsInQuarter.push('October', 'November', 'December');
+
+                        monthsInQuarter.forEach(month => {
+                            if (yearData[month]) {
+                                const monthReport = yearData[month];
+                                aggregatedData[quarterName].totalTicketsCount += monthReport.totalTicketsCount;
+                                monthReport.uniqueTicketsSet.forEach(ticket => aggregatedData[quarterName].uniqueTicketsSet.add(ticket));
+                                aggregatedData[quarterName].totalTimeSpent += monthReport.totalTimeSpent;
+                                aggregatedData[quarterName].totalEstimatedTimeSpent += monthReport.totalEstimatedTimeSpent;
+
+                                Object.keys(monthReport.taskTypeCounts).forEach(taskType => {
+                                    aggregatedData[quarterName].taskTypeCounts[taskType] = (aggregatedData[quarterName].taskTypeCounts[taskType] || 0) + monthReport.taskTypeCounts[taskType];
+                                });
+                                Object.keys(monthReport.timeSpentPerMember).forEach(member => {
+                                    aggregatedData[quarterName].timeSpentPerMember[member] = (aggregatedData[quarterName].timeSpentPerMember[member] || 0) + monthReport.timeSpentPerMember[member];
+                                });
+                            }
+                        });
+                        aggregatedData[quarterName].totalUniqueTickets = aggregatedData[quarterName].uniqueTicketsSet.size;
+                    }
+                } else if (format === 'Yearly') {
+                    const yearKey = String(year);
+                    if (!aggregatedData[yearKey]) {
+                        aggregatedData[yearKey] = {
+                            totalTicketsCount: 0,
+                            uniqueTicketsSet: new Set(),
+                            totalTimeSpent: 0,
+                            totalEstimatedTimeSpent: 0,
+                            taskTypeCounts: {},
+                            timeSpentPerMember: {}
+                        };
+                    }
+
+                    Object.keys(yearData).forEach(month => {
+                        const monthReport = yearData[month];
+                        aggregatedData[yearKey].totalTicketsCount += monthReport.totalTicketsCount;
+                        monthReport.uniqueTicketsSet.forEach(ticket => aggregatedData[yearKey].uniqueTicketsSet.add(ticket));
+                        aggregatedData[yearKey].totalTimeSpent += monthReport.totalTimeSpent;
+                        aggregatedData[yearKey].totalEstimatedTimeSpent += monthReport.totalEstimatedTimeSpent;
+
+                        Object.keys(monthReport.taskTypeCounts).forEach(taskType => {
+                            aggregatedData[yearKey].taskTypeCounts[taskType] = (aggregatedData[yearKey].taskTypeCounts[taskType] || 0) + monthReport.taskTypeCounts[taskType];
+                        });
+                        Object.keys(monthReport.timeSpentPerMember).forEach(member => {
+                            aggregatedData[yearKey].timeSpentPerMember[member] = (aggregatedData[yearKey].timeSpentPerMember[member] || 0) + monthReport.timeSpentPerMember[member];
+                        });
+                    });
+                    aggregatedData[yearKey].totalUniqueTickets = aggregatedData[yearKey].uniqueTicketsSet.size;
+                }
+            });
+
+            return aggregatedData;
+        }
+
+
+        /**
+         * Renders the tickets bar chart for monthly data.
+         * This chart now displays the TOTAL NUMBER OF TICKET ENTRIES (non-unique).
+         * @param {object} dataToChart - Object containing report data (monthly, quarterly, or yearly).
+         * @param {string} reportTitleSuffix - Suffix for the chart title (e.g., "by Month" or "Across Projects").
+         * @param {string} xAxisLabel - Label for the X-axis.
+         */
+        function renderTicketsChart(dataToChart, reportTitleSuffix = "by Period", xAxisLabel = "Period") {
+            if (ticketsChartInstance) {
+                ticketsChartInstance.destroy();
+            }
+
+            const labels = Object.keys(dataToChart);
+            const ticketCounts = labels.map(label => dataToChart[label].totalTicketsCount);
+
+            if (labels.length === 0 || ticketCounts.every(count => count === 0)) {
+                ticketsChartContainer.classList.add('hidden');
+                return;
+            }
+
+            ticketsChartContainer.classList.remove('hidden');
+
+            const ctx = ticketsChartCanvas.getContext('2d');
+            ticketsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Total Ticket Entries',
+                        data: ticketCounts,
+                        backgroundColor: 'rgba(60, 140, 210, 0.8)', // Professional Blue
+                        borderColor: 'rgba(60, 140, 210, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Total Ticket Entries ${reportTitleSuffix}`, // Dynamic title
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: { display: false },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value) {
+                                return value.toLocaleString();
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Count',
+                                font: { family: 'Inter' }
+                            },
+                            ticks: {
+                                precision: 0
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: xAxisLabel, // Dynamic axis label
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Renders the combined bar chart for Total Time Spent and Estimated Time Spent.
+         * This chart is now horizontal.
+         * @param {object} dataToChart - Object containing report data (monthly, quarterly, or yearly).
+         * @param {string} reportTitleSuffix - Suffix for the chart title.
+         * @param {string} yAxisLabel - Label for the Y-axis.
+         */
+        function renderTimeSpentChart(dataToChart, reportTitleSuffix = "by Period", yAxisLabel = "Period") {
+            if (timeSpentChartInstance) {
+                timeSpentChartInstance.destroy();
+            }
+
+            const periods = Object.keys(dataToChart);
+            const totalTimeSpentValues = periods.map(period => dataToChart[period].totalTimeSpent);
+            const totalEstimatedTimeSpentValues = periods.map(period => dataToChart[period].totalEstimatedTimeSpent);
+
+            const hasData = totalTimeSpentValues.some(value => value > 0) || totalEstimatedTimeSpentValues.some(value => value > 0);
+
+            if (periods.length === 0 || !hasData) {
+                timeSpentChartContainer.classList.add('hidden');
+                timeSpentConclusionDiv.classList.add('hidden'); // Hide conclusion if no data
+                return;
+            }
+
+            timeSpentChartContainer.classList.remove('hidden');
+
+            const ctx = timeSpentChartCanvas.getContext('2d');
+            timeSpentChartInstance = new Chart(ctx, {
+                type: 'bar', // Keep type as 'bar'
+                data: {
+                    labels: periods,
+                    datasets: [
+                        {
+                            label: 'Total Time Spent (Actual)',
+                            data: totalTimeSpentValues,
+                            backgroundColor: 'rgba(80, 180, 140, 0.8)', // Professional Green/Teal (Actual)
+                            borderColor: 'rgba(80, 180, 140, 1)',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Total Estimated Time Spent',
+                            data: totalEstimatedTimeSpentValues,
+                            backgroundColor: 'rgba(255, 152, 0, 0.8)', // Professional Orange (Estimated)
+                            borderColor: 'rgba(255, 152, 0, 1)',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    indexAxis: 'y', // THIS MAKES IT HORIZONTAL
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Actual vs. Estimated Time Spent ${reportTitleSuffix}`, // Dynamic title
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                font: {
+                                    family: 'Inter'
+                                }
+                            }
+                        },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'right', // Align labels to the right for horizontal bars
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value) {
+                                return formatHoursForDisplay(value); // Format for display
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { // X-axis is now the value axis
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours', // Changed to Hours
+                                font: { family: 'Inter' }
+                            }
+                        },
+                        y: { // Y-axis is now the category axis (months or projects)
+                            title: {
+                                display: true,
+                                text: yAxisLabel, // Dynamic axis label
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Generate and display conclusion
+            const overallActualTime = totalTimeSpentValues.reduce((sum, val) => sum + val, 0);
+            const overallEstimatedTime = totalEstimatedTimeSpentValues.reduce((sum, val) => sum + val, 0);
+            let conclusionText = "";
+
+            if (overallActualTime > overallEstimatedTime) {
+                const difference = (overallActualTime - overallEstimatedTime);
+                conclusionText = `Conclusion: Workload was heavier than expected, with actual time spent exceeding estimated time by approximately ${formatHoursForDisplay(difference)}.`;
+            } else if (overallActualTime < overallEstimatedTime) {
+                const difference = (overallEstimatedTime - overallActualTime);
+                conclusionText = `Conclusion: Workload was lighter than expected, with actual time spent being less than estimated time by approximately ${formatHoursForDisplay(difference)}.`;
+            } else {
+                conclusionText = `Conclusion: Actual time spent closely matched the estimated time.`;
+            }
+
+            timeSpentConclusionDiv.textContent = conclusionText;
+            timeSpentConclusionDiv.classList.remove('hidden'); // Show the conclusion
+        }
+
+        /**
+         * Renders a bar chart showing total ticket entries per project.
+         * @param {object} projectData - Object mapping project names to their total ticket counts.
+         * @param {string} chartTitle - Title for the chart.
+         */
+        function renderProjectTicketsChart(projectData, chartTitle) {
+            if (projectTicketsChartInstance) {
+                projectTicketsChartInstance.destroy();
+            }
+
+            const projectNames = Object.keys(projectData);
+            const ticketCounts = projectNames.map(name => projectData[name]);
+
+            if (projectNames.length === 0 || ticketCounts.every(count => count === 0)) {
+                projectTicketsChartContainer.classList.add('hidden');
+                return;
+            }
+
+            projectTicketsChartContainer.classList.remove('hidden');
+
+            const ctx = projectTicketsChartCanvas.getContext('2d');
+            projectTicketsChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: projectNames,
+                    datasets: [{
+                        label: 'Total Ticket Entries',
+                        data: ticketCounts,
+                        backgroundColor: 'rgba(75, 192, 192, 0.8)', // A distinct color for this chart
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chartTitle,
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: { display: false },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value) {
+                                return value.toLocaleString();
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Count',
+                                font: { family: 'Inter' }
+                            },
+                            ticks: {
+                                precision: 0
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Project',
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /**
+         * Renders a bar chart showing total time spent per project.
+         * @param {object} projectTimeData - Object mapping project names to their total time spent.
+         * @param {string} chartTitle - Title for the chart.
+         */
+        function renderProjectTimeSpentChart(projectTimeData, chartTitle) {
+            if (projectTimeSpentChartInstance) {
+                projectTimeSpentChartInstance.destroy();
+            }
+
+            const projectNames = Object.keys(projectTimeData);
+            const timeSpent = projectNames.map(name => projectTimeData[name]);
+
+            if (projectNames.length === 0 || timeSpent.every(value => value === 0)) {
+                projectTimeSpentChartContainer.classList.add('hidden');
+                return;
+            }
+
+            projectTimeSpentChartContainer.classList.remove('hidden');
+
+            const ctx = projectTimeSpentChartCanvas.getContext('2d');
+            projectTimeSpentChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: projectNames,
+                    datasets: [{
+                        label: 'Total Time Spent',
+                        data: timeSpent,
+                        backgroundColor: 'rgba(153, 102, 255, 0.8)', // A distinct color (e.g., purple)
+                        borderColor: 'rgba(153, 102, 255, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chartTitle,
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: { display: false },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'top',
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value) {
+                                return formatHoursForDisplay(value); // Format time for display
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours',
+                                font: { family: 'Inter' }
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Project',
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        /**
+         * Renders a bar chart showing total time spent per member.
+         * @param {object} memberTimeData - Object mapping member names to their total time spent.
+         * @param {string} chartTitle - Title for the chart.
+         */
+        function renderMemberTimeSpentChart(memberTimeData, chartTitle) {
+            if (memberTimeSpentChartInstance) {
+                memberTimeSpentChartInstance.destroy();
+            }
+
+            const memberNames = Object.keys(memberTimeData).sort(); // Sort members alphabetically
+            const timeSpent = memberNames.map(name => memberTimeData[name]);
+
+            if (memberNames.length === 0 || timeSpent.every(value => value === 0)) {
+                memberTimeSpentChartContainer.classList.add('hidden');
+                return;
+            }
+
+            memberTimeSpentChartContainer.classList.remove('hidden');
+
+            const ctx = memberTimeSpentChartCanvas.getContext('2d');
+            memberTimeSpentChartInstance = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: memberNames,
+                    datasets: [{
+                        label: 'Total Time Spent',
+                        data: timeSpent,
+                        backgroundColor: 'rgba(255, 99, 132, 0.8)', // A distinct color for this chart (e.g., light red)
+                        borderColor: 'rgba(255, 99, 132, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // Horizontal bars for member names
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chartTitle,
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: { display: false },
+                        datalabels: {
+                            anchor: 'end',
+                            align: 'right', // Align labels to the right for horizontal bars
+                            color: '#333',
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value) {
+                                return formatHoursForDisplay(value); // Format time for display
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours', // X-axis is hours
+                                font: { family: 'Inter' }
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Member', // Y-axis is member names
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        /**
+         * Renders a task type pie chart.
+         * @param {string} chartTitle - Title for the chart.
+         * @param {object} taskTypeCounts - An object with task types as keys and their counts as values.
+         * @param {string} containerIdSuffix - Suffix for the container ID (e.g., month name or "Overall").
+         */
+        function renderTaskTypePieChart(chartTitle, taskTypeCounts, containerIdSuffix) {
+            const labels = Object.keys(taskTypeCounts);
+            const data = Object.values(taskTypeCounts);
+
+            if (labels.length === 0) {
+                return;
+            }
+
+            const backgroundColors = labels.map((_, i) => getPaletteColor(i));
+            const borderColors = labels.map((_, i) => getPaletteBorderColor(i));
+
+            const chartDiv = document.createElement('div');
+            chartDiv.classList.add('monthly-pie-chart-container'); // Reusing class for styling
+            chartDiv.id = `taskTypeChartContainer_${containerIdSuffix.replace(/\s+/g, '')}`;
+
+            const chartCanvas = document.createElement('canvas');
+            chartCanvas.id = `taskTypeChart_${containerIdSuffix.replace(/\s+/g, '')}`;
+            chartDiv.appendChild(chartCanvas);
+            allMonthlyTaskTypeChartsContainer.appendChild(chartDiv);
+
+            const ctx = chartCanvas.getContext('2d');
+            const newChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: chartTitle,
+                        data: data,
+                        backgroundColor: backgroundColors,
+                        borderColor: borderColors,
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: chartTitle,
+                            font: { size: 18, family: 'Inter' },
+                            color: '#333'
+                        },
+                        legend: {
+                            display: true,
+                            position: 'right',
+                            labels: {
+                                font: {
+                                    family: 'Inter'
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed.toLocaleString();
+                                        const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                                        const percentage = ((context.parsed / total) * 100).toFixed(1) + '%';
+                                        label += ` (${percentage})`;
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        datalabels: {
+                            color: '#fff', // White color for text on slices
+                            font: {
+                                weight: 'bold',
+                                family: 'Inter'
+                            },
+                            formatter: function(value, context) {
+                                const total = context.dataset.data.reduce((sum, val) => sum + val, 0);
+                                const percentage = ((value / total) * 100).toFixed(1) + '%';
+                                return `${value.toLocaleString()}\n(${percentage})`;
+                            }
+                        }
+                    }
+                }
+            });
+            monthlyTaskTypeChartInstances[containerIdSuffix] = newChartInstance; // Store with unique suffix
+        }
+
+        /**
+         * Clears all charts and hides their containers.
+         */
+        function clearCharts() {
+            if (ticketsChartInstance) {
+                ticketsChartInstance.destroy();
+                ticketsChartInstance = null;
+            }
+            if (timeSpentChartInstance) {
+                timeSpentChartInstance.destroy();
+                timeSpentChartInstance = null;
+            }
+            if (projectTicketsChartInstance) {
+                projectTicketsChartInstance.destroy();
+                projectTicketsChartInstance = null;
+            }
+            if (projectTimeSpentChartInstance) {
+                projectTimeSpentChartInstance.destroy();
+                projectTimeSpentChartInstance = null;
+            }
+            if (memberTimeSpentChartInstance) {
+                memberTimeSpentChartInstance.destroy();
+                memberTimeSpentChartInstance = null;
+            }
+            const keysToDestroy = Object.keys(monthlyTaskTypeChartInstances);
+            for (const key of keysToDestroy) {
+                if (monthlyTaskTypeChartInstances[key]) {
+                    monthlyTaskTypeChartInstances[key].destroy();
+                    delete monthlyTaskTypeChartInstances[key];
+                }
+            }
+            allMonthlyTaskTypeChartsContainer.innerHTML = '';
+
+            ticketsChartContainer.classList.add('hidden');
+            timeSpentChartContainer.classList.add('hidden');
+            timeSpentConclusionDiv.classList.add('hidden');
+            projectTicketsChartContainer.classList.add('hidden');
+            projectTimeSpentChartContainer.classList.add('hidden');
+            memberTimeSpentChartContainer.classList.add('hidden');
+            exportPdfButton.classList.add('hidden');
+            reportOutputDiv.innerHTML = '<div class="chat-message bot">Hello! I\'m ready to help you generate a report. Please upload an Excel file.</div>';
+            excelFileInput.value = '';
+            mainReportTitle.textContent = 'Global Specialist Report Generator';
+        }
+
+        /**
+         * Updates the list of project checkboxes for combined reporting.
+         */
+        function updateProjectCheckboxes() {
+            projectCheckboxesContainer.innerHTML = '';
+            const availableProjects = Object.keys(allProcessedProjectData);
+
+            if (availableProjects.length === 0) {
+                projectCheckboxesContainer.appendChild(noProjectsMessage);
+                generateCombinedReportButton.disabled = true;
+                return;
+            } else {
+                if (noProjectsMessage.parentNode) {
+                    noProjectsMessage.parentNode.removeChild(noProjectsMessage);
+                }
+            }
+
+            availableProjects.forEach(projectName => {
+                const checkboxDiv = document.createElement('div');
+                checkboxDiv.className = 'flex items-center';
+                const checkboxId = `project_${projectName.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '')}`;
+
+                checkboxDiv.innerHTML = `
+                    <input type="checkbox" id="${checkboxId}" value="${projectName}" class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                    <label for="${checkboxId}" class="ml-2 text-gray-700">${projectName}</label>
+                `;
+                projectCheckboxesContainer.appendChild(checkboxDiv);
+            });
+
+            projectCheckboxesContainer.addEventListener('change', () => {
+                const checkedCheckboxes = projectCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked');
+                generateCombinedReportButton.disabled = checkedCheckboxes.length === 0;
+            });
+            generateCombinedReportButton.disabled = true;
+        }
+
+        /**
+         * Generates and displays a combined report for selected projects.
+         */
+        generateCombinedReportButton.addEventListener('click', () => {
+            const selectedProjectNames = Array.from(projectCheckboxesContainer.querySelectorAll('input[type="checkbox"]:checked'))
+                                            .map(checkbox => checkbox.value);
+            const selectedReportFormat = reportFormatSelect.value;
+
+            if (selectedProjectNames.length === 0) {
+                appendMessage("Bot: Please select at least one project to generate a combined report.", "bot");
+                return;
+            }
+
+            clearCharts();
+
+            mainReportTitle.textContent = `Global Specialist Report for: ${selectedProjectNames.join(', ')}`;
+
+            const combinedMonthlyDataRaw = {};
+            const combinedOverallUniqueTicketsSet = new Set();
+            let combinedOverallTotalTicketsCount = 0;
+            const combinedOverallTaskTypeCounts = {};
+            const ticketsPerProjectChartData = {};
+            const timeSpentPerProjectChartData = {};
+            const combinedTimeSpentPerMember = {};
+
+            selectedProjectNames.forEach(projectName => {
+                const projectData = allProcessedProjectData[projectName];
+                if (projectData && projectData.monthlyData) {
+                    Object.keys(projectData.monthlyData).forEach(month => {
+                        if (!combinedMonthlyDataRaw[month]) {
+                            combinedMonthlyDataRaw[month] = {
+                                totalTicketsCount: 0,
+                                uniqueTicketsSet: new Set(),
+                                totalTimeSpent: 0,
+                                totalEstimatedTimeSpent: 0,
+                                taskTypeCounts: {},
+                                timeSpentPerMember: {}
+                            };
+                        }
+                        combinedMonthlyDataRaw[month].totalTicketsCount += projectData.monthlyData[month].totalTicketsCount;
+                        projectData.monthlyData[month].uniqueTicketsSet.forEach(ticket => combinedMonthlyDataRaw[month].uniqueTicketsSet.add(ticket));
+                        combinedMonthlyDataRaw[month].totalTimeSpent += projectData.monthlyData[month].totalTimeSpent;
+                        combinedMonthlyDataRaw[month].totalEstimatedTimeSpent += projectData.monthlyData[month].totalEstimatedTimeSpent;
+
+                        Object.keys(projectData.monthlyData[month].taskTypeCounts).forEach(taskType => {
+                            combinedMonthlyDataRaw[month].taskTypeCounts[taskType] = (combinedMonthlyDataRaw[month].taskTypeCounts[taskType] || 0) + projectData.monthlyData[month].taskTypeCounts[taskType];
+                        });
+
+                        Object.keys(projectData.monthlyData[month].timeSpentPerMember).forEach(member => {
+                            combinedMonthlyDataRaw[month].timeSpentPerMember[member] = (combinedMonthlyDataRaw[month].timeSpentPerMember[member] || 0) + projectData.monthlyData[month].timeSpentPerMember[member];
+                        });
+                    });
+
+                    projectData.overallUniqueTicketsSet.forEach(ticket => combinedOverallUniqueTicketsSet.add(ticket));
+                    combinedOverallTotalTicketsCount += projectData.overallTotalTicketsCount;
+
+                    ticketsPerProjectChartData[projectName] = projectData.overallTotalTicketsCount;
+                    timeSpentPerProjectChartData[projectName] = projectData.overallTimeSpent;
+
+                    Object.keys(projectData.overallTaskTypeCounts).forEach(taskType => {
+                        combinedOverallTaskTypeCounts[taskType] = (combinedOverallTaskTypeCounts[taskType] || 0) + projectData.overallTaskTypeCounts[taskType];
+                    });
+
+                    Object.keys(projectData.overallTimeSpentPerMember).forEach(member => {
+                        combinedTimeSpentPerMember[member] = (combinedTimeSpentPerMember[member] || 0) + projectData.overallTimeSpentPerMember[member];
+                    });
+                }
+            });
+
+            Object.keys(combinedMonthlyDataRaw).forEach(month => {
+                combinedMonthlyDataRaw[month].totalUniqueTickets = combinedMonthlyDataRaw[month].uniqueTicketsSet.size;
+            });
+
+            const dataToDisplay = aggregateDataByFormat(combinedMonthlyDataRaw, selectedReportFormat);
+            const reportPeriodLabel = (selectedReportFormat === 'Monthly') ? 'Month' : (selectedReportFormat === 'Quarterly' ? 'Quarter' : 'Year');
+            const reportSuffix = (selectedReportFormat === 'Yearly') ? 'Yearly' : `by ${reportPeriodLabel}`;
+
+
+            const totalUniqueTicketsOverallCombined = combinedOverallUniqueTicketsSet.size;
+
+            if (combinedOverallTotalTicketsCount === 0) {
+                appendMessage("Bot: No valid data found for the selected projects to generate a combined report.", "bot");
+                clearCharts();
+            } else {
+                appendMessage("Bot: Combined Report Generated!", "bot");
+                appendMessage(`Bot: Here's a combined ${selectedReportFormat.toLowerCase()} summary for projects: "${selectedProjectNames.join(', ')}":`, "bot");
+
+                const sortedPeriods = Object.keys(dataToDisplay).sort((a, b) => {
+                    if (selectedReportFormat === 'Monthly') {
+                        const aIndex = MONTH_ORDER.indexOf(a.split(' ')[0]);
+                        const bIndex = MONTH_ORDER.indexOf(b.split(' ')[0]);
+                        if (aIndex !== -1 && bIndex !== -1) {
+                            const aYear = parseInt(a.split(' ')[1] || new Date().getFullYear());
+                            const bYear = parseInt(b.split(' ')[1] || new Date().getFullYear());
+                            if (aYear !== bYear) return aYear - bYear;
+                            return aIndex - bIndex;
+                        }
+                        return a.localeCompare(b);
+                    } else if (selectedReportFormat === 'Quarterly') {
+                        const aQuarter = parseInt(a.substring(1, a.indexOf(' ')));
+                        const bQuarter = parseInt(b.substring(1, b.indexOf(' ')));
+                        const aYear = parseInt(a.split(' ')[1]);
+                        const bYear = parseInt(b.split(' ')[1]);
+                        if (aYear !== bYear) return aYear - bYear;
+                        return aQuarter - bQuarter;
+                    } else if (selectedReportFormat === 'Yearly') {
+                        return parseInt(a) - parseInt(b);
+                    }
+                    return a.localeCompare(b);
+                });
+
+                sortedPeriods.forEach(period => {
+                    const periodReport = dataToDisplay[period];
+                    if (periodReport.totalTicketsCount > 0 || periodReport.totalTimeSpent > 0 || periodReport.totalEstimatedTimeSpent > 0) {
+                        const avgTimePerTicket = periodReport.totalUniqueTickets > 0 ? (periodReport.totalTimeSpent / periodReport.totalUniqueTickets) : 0;
+                        const avgEstimatedTimePerTicket = periodReport.totalUniqueTickets > 0 ? (periodReport.totalEstimatedTimeSpent / periodReport.totalUniqueTickets) : 0;
+
+                        appendMessage(`Bot: --- ${period} Combined Report ---`, "bot");
+                        appendMessage(`Bot:   Total Ticket Entries: ${periodReport.totalTicketsCount.toLocaleString()}`, "bot");
+                        appendMessage(`Bot:   Total Unique Tickets Counted: ${periodReport.totalUniqueTickets.toLocaleString()}`, "bot");
+                        appendMessage(`Bot:   Total Time Spent (Actual): ${formatHoursForDisplay(periodReport.totalTimeSpent)}`, "bot");
+                        appendMessage(`Bot:   Total Estimated Time Spent: ${formatHoursForDisplay(periodReport.totalEstimatedTimeSpent)}`, "bot");
+                        appendMessage(`Bot:   Average Time Per Unique Ticket (Actual): ${formatHoursForDisplay(avgTimePerTicket)}`, "bot");
+                        appendMessage(`Bot:   Average Estimated Time Per Unique Ticket: ${formatHoursForDisplay(avgEstimatedTimePerTicket)}`, "bot");
+
+                        const membersInPeriod = Object.keys(periodReport.timeSpentPerMember);
+                        if (membersInPeriod.length > 0) {
+                            appendMessage(`Bot:   Time Spent by Members in ${period}:`, "bot");
+                            membersInPeriod.sort().forEach(member => {
+                                appendMessage(`Bot:     - ${member}: ${formatHoursForDisplay(periodReport.timeSpentPerMember[member])}`, "bot");
+                            });
+                        }
+                    } else {
+                        appendMessage(`Bot: --- ${period} Combined Report ---`, "bot");
+                        appendMessage(`Bot:   No valid data found for ${period}.`, "bot");
+                    }
+                });
+
+                appendMessage(`Bot: This combined report is based on ${combinedOverallTotalTicketsCount.toLocaleString()} total ticket entries and ${totalUniqueTicketsOverallCombined.toLocaleString()} unique tickets found across the selected projects.`, "bot");
+
+                const overallMembers = Object.keys(combinedTimeSpentPerMember);
+                if (overallMembers.length > 0) {
+                    appendMessage(`Bot: Overall Time Spent by Members Across Selected Projects:`, "bot");
+                    overallMembers.sort().forEach(member => {
+                        appendMessage(`Bot:   - ${member}: ${formatHoursForDisplay(combinedTimeSpentPerMember[member])}`, "bot");
+                    });
+                }
+
+
+                renderTicketsChart(dataToDisplay, `Across Selected Projects (${reportSuffix})`, reportPeriodLabel);
+                renderTimeSpentChart(dataToDisplay, `Across Selected Projects (${reportSuffix})`, reportPeriodLabel);
+                renderProjectTicketsChart(ticketsPerProjectChartData, "Total Ticket Entries Per Selected Project");
+                renderProjectTimeSpentChart(timeSpentPerProjectChartData, "Total Time Spent Per Selected Project");
+                renderMemberTimeSpentChart(combinedTimeSpentPerMember, "Overall Time Spent Per Member Across Selected Projects");
+
+
+                if (Object.keys(combinedOverallTaskTypeCounts).length > 0) {
+                    renderTaskTypePieChart(`Overall Task Type Distribution Across Selected Projects`, combinedOverallTaskTypeCounts, "CombinedOverall");
+                } else {
+                    appendMessage("Bot: Note: No valid 'Type of Task' data was found across the selected projects, so no combined pie chart was generated.", "bot");
+                }
+                exportPdfButton.classList.remove('hidden');
+            }
+        });
+
+
+        /**
+         * Handles the file input change event.
+         * Reads the Excel file, extracts data, and generates a report.
+         */
+        excelFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            const selectedProject = projectSelect.value;
+            const selectedReportFormat = reportFormatSelect.value;
+
+            clearCharts();
+            reportOutputDiv.innerHTML = '<div class="chat-message bot">Hello! I\'m ready to help you generate a report. Please upload an Excel file.</div>';
+            mainReportTitle.textContent = `Global Specialist Report Generator`;
+
+
+            if (!file) {
+                appendMessage("No file selected. Please choose an Excel file to proceed.", "bot");
+                return;
+            }
+
+            loadingIndicator.style.display = 'block';
+            appendMessage(`You: Uploaded "${file.name}" for project "${selectedProject}"`, "user");
+            appendMessage("Bot: Processing your file...", "bot");
+
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+
+                    const currentProjectMonthlyDataRaw = {};
+                    const currentProjectUniqueTicketsSet = new Set();
+                    let currentProjectTotalTicketsCount = 0;
+                    const currentProjectTaskTypeCounts = {};
+                    const currentProjectOverallTimeSpentPerMember = {};
+                    let currentProjectOverallTimeSpent = 0;
+
+                    const ticketsVariations = ['tickets', 'ticket', 'ticket count', 'number of tickets', 'ticket id', 'ticket number'];
+                    const timeSpentVariations = ['time spent', 'timespent', 'time_spent', 'hours spent', 'duration', 'spent time'];
+                    const estimatedTimeVariations = ['estimated time spent', 'estimated time', 'estimate', 'est time'];
+                    const taskTypeVariations = ['type of task', 'task type', 'task category', 'category', 'type'];
+                    const authorVariations = ['author', 'member', 'team member', 'assigned to'];
+
+                    workbook.SheetNames.forEach(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
+                        const rawData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+                        if (rawData.length < 1) {
+                            console.warn(`Sheet '${sheetName}' is empty or has no headers. Skipping.`);
+                            return;
+                        }
+
+                        const headers = rawData[0];
+                        const dataRows = rawData.slice(1);
+
+                        console.log(`Processing sheet: '${sheetName}'`);
+                        console.log(`Headers for '${sheetName}':`, headers);
+
+                        let ticketsColumnIndex = -1;
+                        let timeSpentColumnIndex = -1;
+                        let estimatedTimeColumnIndex = -1;
+                        let taskTypeColumnIndex = -1;
+                        let authorColumnIndex = -1;
+
+                        headers.forEach((header, index) => {
+                            const normalizedHeader = String(header || '').trim().toLowerCase();
+                            if (ticketsVariations.includes(normalizedHeader) && ticketsColumnIndex === -1) {
+                                ticketsColumnIndex = index;
+                            }
+                            if (timeSpentVariations.includes(normalizedHeader) && timeSpentColumnIndex === -1) {
+                                timeSpentColumnIndex = index;
+                            }
+                            if (estimatedTimeVariations.includes(normalizedHeader) && estimatedTimeColumnIndex === -1) {
+                                estimatedTimeColumnIndex = index;
+                            }
+                            if (taskTypeVariations.includes(normalizedHeader) && taskTypeColumnIndex === -1) {
+                                taskTypeColumnIndex = index;
+                            }
+                            if (authorVariations.includes(normalizedHeader) && authorColumnIndex === -1) {
+                                authorColumnIndex = index;
+                            }
+                        });
+
+                        if (ticketsColumnIndex !== -1 && (timeSpentColumnIndex !== -1 || estimatedTimeColumnIndex !== -1)) {
+                            currentProjectMonthlyDataRaw[sheetName] = {
+                                totalTicketsCount: 0,
+                                uniqueTicketsSet: new Set(),
+                                totalTimeSpent: 0,
+                                totalEstimatedTimeSpent: 0,
+                                taskTypeCounts: {},
+                                timeSpentPerMember: {}
+                            };
+                        } else {
+                            appendMessage(`Bot: Warning: Could not find 'Tickets' and either 'Time Spent' or 'Estimated Time Spent' columns in sheet '${sheetName}'. Data for this sheet will be skipped.`, "bot");
+                            return;
+                        }
+
+                        dataRows.forEach(row => {
+                            const hasTicketsCol = ticketsColumnIndex !== -1 && row.length > ticketsColumnIndex;
+                            const hasTimeSpentCol = timeSpentColumnIndex !== -1 && row.length > timeSpentColumnIndex;
+                            const hasEstimatedTimeCol = estimatedTimeColumnIndex !== -1 && row.length > estimatedTimeColumnIndex;
+                            const hasTaskTypeCol = taskTypeColumnIndex !== -1 && row.length > taskTypeColumnIndex;
+                            const hasAuthorCol = authorColumnIndex !== -1 && row.length > authorColumnIndex;
+
+                            const ticketEntry = hasTicketsCol ? String(row[ticketsColumnIndex] || '').trim() : '';
+                            const rawTimeSpent = hasTimeSpentCol ? row[timeSpentColumnIndex] : NaN;
+                            const timeSpent = parseTimeSpentToHours(rawTimeSpent);
+                            const estimatedTime = hasEstimatedTimeCol ? parseFloat(row[estimatedTimeColumnIndex]) : NaN;
+                            const rawTaskType = hasTaskTypeCol ? String(row[taskTypeColumnIndex] || '').trim() : '';
+                            const author = hasAuthorCol ? String(row[authorColumnIndex] || '').trim() : 'Unassigned';
+
+                            if (ticketEntry !== '' && (!isNaN(timeSpent) || !isNaN(estimatedTime))) {
+                                currentProjectMonthlyDataRaw[sheetName].totalTicketsCount++;
+                                currentProjectMonthlyDataRaw[sheetName].uniqueTicketsSet.add(ticketEntry);
+                                
+                                if (!isNaN(timeSpent)) {
+                                    currentProjectMonthlyDataRaw[sheetName].totalTimeSpent += timeSpent;
+                                    currentProjectMonthlyDataRaw[sheetName].timeSpentPerMember[author] = (currentProjectMonthlyDataRaw[sheetName].timeSpentPerMember[author] || 0) + timeSpent;
+                                    currentProjectOverallTimeSpentPerMember[author] = (currentProjectOverallTimeSpentPerMember[author] || 0) + timeSpent;
+                                    currentProjectOverallTimeSpent += timeSpent;
+                                }
+                                if (!isNaN(estimatedTime)) {
+                                    currentProjectMonthlyDataRaw[sheetName].totalEstimatedTimeSpent += estimatedTime;
+                                }
+
+                                currentProjectUniqueTicketsSet.add(ticketEntry);
+                                currentProjectTotalTicketsCount++;
+
+                                // Process task types: split by comma and count only valid ones
+                                if (rawTaskType !== '') {
+                                    const taskTypesInCell = rawTaskType.split(',').map(t => t.trim());
+                                    taskTypesInCell.forEach(task => {
+                                        if (VALID_TASK_TYPES.includes(task)) {
+                                            currentProjectMonthlyDataRaw[sheetName].taskTypeCounts[task] = (currentProjectMonthlyDataRaw[sheetName].taskTypeCounts[task] || 0) + 1;
+                                            currentProjectTaskTypeCounts[task] = (currentProjectTaskTypeCounts[task] || 0) + 1;
+                                        }
+                                    });
+                                }
+                            }
+                        });
+                        currentProjectMonthlyDataRaw[sheetName].totalUniqueTickets = currentProjectMonthlyDataRaw[sheetName].uniqueTicketsSet.size;
+                    });
+
+                    allProcessedProjectData[selectedProject] = {
+                        monthlyData: currentProjectMonthlyDataRaw,
+                        overallUniqueTicketsSet: currentProjectUniqueTicketsSet,
+                        overallTotalTicketsCount: currentProjectTotalTicketsCount,
+                        overallTaskTypeCounts: currentProjectTaskTypeCounts,
+                        overallTimeSpentPerMember: currentProjectOverallTimeSpentPerMember,
+                        overallTimeSpent: currentProjectOverallTimeSpent
+                    };
+                    updateProjectCheckboxes();
+
+                    const totalUniqueTicketsOverall = currentProjectUniqueTicketsSet.size;
+
+                    if (currentProjectTotalTicketsCount === 0) {
+                        appendMessage("Bot: No valid ticket data found across any sheets for this project. Please check your Excel file structure and content.", "bot");
+                        clearCharts();
+                    } else {
+                        mainReportTitle.textContent = `Global Specialist Report for ${selectedProject}`;
+                        appendMessage("Bot: Report Generated!", "bot");
+                        appendMessage(`Bot: Here's a ${selectedReportFormat.toLowerCase()} summary of your team's performance for project "${selectedProject}", based on separate tabs:`, "bot");
+
+                        const dataToDisplay = aggregateDataByFormat(currentProjectMonthlyDataRaw, selectedReportFormat);
+                        const reportPeriodLabel = (selectedReportFormat === 'Monthly') ? 'Month' : (selectedReportFormat === 'Quarterly' ? 'Quarter' : 'Year');
+                        const reportSuffix = (selectedReportFormat === 'Yearly') ? 'Yearly' : `by ${reportPeriodLabel}`;
+
+                        const sortedPeriods = Object.keys(dataToDisplay).sort((a, b) => {
+                            if (selectedReportFormat === 'Monthly') {
+                                const aIndex = MONTH_ORDER.indexOf(a.split(' ')[0]);
+                                const bIndex = MONTH_ORDER.indexOf(b.split(' ')[0]);
+                                if (aIndex !== -1 && bIndex !== -1) {
+                                    const aYear = parseInt(a.split(' ')[1] || new Date().getFullYear());
+                                    const bYear = parseInt(b.split(' ')[1] || new Date().getFullYear());
+                                    if (aYear !== bYear) return aYear - bYear;
+                                    return aIndex - bIndex;
+                                }
+                                return a.localeCompare(b);
+                            } else if (selectedReportFormat === 'Quarterly') {
+                                const aQuarter = parseInt(a.substring(1, a.indexOf(' ')));
+                                const bQuarter = parseInt(b.substring(1, b.indexOf(' ')));
+                                const aYear = parseInt(a.split(' ')[1]);
+                                const bYear = parseInt(b.split(' ')[1]);
+                                if (aYear !== bYear) return aYear - bYear;
+                                return aQuarter - bQuarter;
+                            } else if (selectedReportFormat === 'Yearly') {
+                                return parseInt(a) - parseInt(b);
+                            }
+                            return a.localeCompare(b);
+                        });
+
+                        sortedPeriods.forEach(period => {
+                            const periodReport = dataToDisplay[period];
+                            if (periodReport.totalTicketsCount > 0 || periodReport.totalTimeSpent > 0 || periodReport.totalEstimatedTimeSpent > 0) {
+                                const avgTimePerTicket = periodReport.totalUniqueTickets > 0 ? (periodReport.totalTimeSpent / periodReport.totalUniqueTickets) : 0;
+                                const avgEstimatedTimePerTicket = periodReport.totalUniqueTickets > 0 ? (periodReport.totalEstimatedTimeSpent / periodReport.totalUniqueTickets) : 0;
+
+                                appendMessage(`Bot: --- ${period} Report ---`, "bot");
+                                appendMessage(`Bot:   Total Ticket Entries: ${periodReport.totalTicketsCount.toLocaleString()}`, "bot");
+                                appendMessage(`Bot:   Total Unique Tickets Counted: ${periodReport.totalUniqueTickets.toLocaleString()}`, "bot");
+                                appendMessage(`Bot:   Total Time Spent (Actual): ${formatHoursForDisplay(periodReport.totalTimeSpent)}`, "bot");
+                                appendMessage(`Bot:   Total Estimated Time Spent: ${formatHoursForDisplay(periodReport.totalEstimatedTimeSpent)}`, "bot");
+                                appendMessage(`Bot:   Average Time Per Unique Ticket (Actual): ${formatHoursForDisplay(avgTimePerTicket)}`, "bot");
+                                appendMessage(`Bot:   Average Estimated Time Per Unique Ticket: ${formatHoursForDisplay(avgEstimatedTimePerTicket)}`, "bot");
+
+                                const membersInPeriod = Object.keys(periodReport.timeSpentPerMember);
+                                if (membersInPeriod.length > 0) {
+                                    appendMessage(`Bot:   Time Spent by Members in ${period}:`, "bot");
+                                    membersInPeriod.sort().forEach(member => {
+                                        appendMessage(`Bot:     - ${member}: ${formatHoursForDisplay(periodReport.timeSpentPerMember[member])}`, "bot");
+                                    });
+                                }
+                            } else {
+                                appendMessage(`Bot: --- ${period} Report ---`, "bot");
+                                appendMessage(`Bot:   No valid data found for ${period}.`, "bot");
+                            }
+                        });
+
+                        appendMessage(`Bot: This report is based on ${currentProjectTotalTicketsCount.toLocaleString()} total ticket entries and ${totalUniqueTicketsOverall.toLocaleString()} unique tickets found for project "${selectedProject}".`, "bot");
+
+                        const overallMembersForProject = Object.keys(currentProjectOverallTimeSpentPerMember);
+                        if (overallMembersForProject.length > 0) {
+                            appendMessage(`Bot: Overall Time Spent by Members for ${selectedProject}:`, "bot");
+                            overallMembersForProject.sort().forEach(member => {
+                                appendMessage(`Bot:   - ${member}: ${formatHoursForDisplay(currentProjectOverallTimeSpentPerMember[member])}`, "bot");
+                            });
+                        }
+
+
+                        renderTicketsChart(dataToDisplay, `for ${selectedProject} (${reportSuffix})`, reportPeriodLabel);
+                        renderTimeSpentChart(dataToDisplay, `for ${selectedProject} (${reportSuffix})`, reportPeriodLabel);
+                        renderMemberTimeSpentChart(currentProjectOverallTimeSpentPerMember, `Overall Time Spent Per Member for ${selectedProject}`);
+
+
+                        let hasTaskTypeDataForAnyPeriod = false;
+                        sortedPeriods.forEach(period => {
+                            const periodReport = dataToDisplay[period];
+                            if (Object.keys(periodReport.taskTypeCounts).length > 0) {
+                                renderTaskTypePieChart(`Distribution of Task Types for ${period}`, periodReport.taskTypeCounts, period);
+                                hasTaskTypeDataForAnyPeriod = true;
+                            }
+                        });
+
+                        if (!hasTaskTypeDataForAnyPeriod) {
+                            appendMessage("Bot: Note: No valid 'Type of Task' data was found for this project, so no pie charts were generated.", "bot");
+                        }
+                        exportPdfButton.classList.remove('hidden');
+                    }
+
+                } catch (error) {
+                    console.error("Error processing Excel file:", error);
+                    appendMessage("Bot: An error occurred while processing your file. Please ensure it's a valid Excel file with monthly data in separate tabs and the expected column headers within each tab. Error details in console.", "bot");
+                    clearCharts();
+                } finally {
+                    loadingIndicator.style.display = 'none';
+                    excelFileInput.value = '';
+                }
+            };
+
+            reader.onerror = (error) => {
+                console.error("FileReader error:", error);
+                appendMessage("Bot: Failed to read the file. Please try again.", "bot");
+                loadingIndicator.style.display = 'none';
+                clearCharts();
+            };
+
+            reader.readAsArrayBuffer(file);
+        });
+
+        projectSelect.addEventListener('change', () => {
+            clearCharts();
+            mainReportTitle.textContent = 'Global Specialist Report Generator';
+            appendMessage(`Bot: Ready to upload an Excel file for project "${projectSelect.value}".`, "bot");
+        });
+
+        reportFormatSelect.addEventListener('change', () => {
+            clearCharts();
+            mainReportTitle.textContent = 'Global Specialist Report Generator';
+            appendMessage(`Bot: Report format set to "${reportFormatSelect.value}". Please upload an Excel file or generate a combined report.`, "bot");
+        });
+
+        updateProjectCheckboxes();
+    </script>
+</body>
+</html>
